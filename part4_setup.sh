@@ -18,11 +18,6 @@ setup_bazarr_dependencies() {
 
 setup_flaresolverr_dependencies() {
     task_info "Installing FlareSolverr dependencies..."
-    if ! command -v node >/dev/null 2>&1; then
-        task_info "Installing Node.js..."
-        curl -fsSL https://deb.nodesource.com/setup_16.x | bash -
-        pkg_install nodejs
-    fi
     pkg_install chromium-browser chromium-chromedriver
 }
 
@@ -52,25 +47,6 @@ setup_app() {
         app_opt_path="/opt/$(title_case ${app_name})"
         app_lib_path="/var/lib/${app}"
         app_config_path="/var/lib/${app_name}/.config/$(title_case ${app_name})"
-
-        # Set file extension and handle dependencies
-        case "${app}" in
-            bazarr)
-                setup_bazarr_dependencies
-                file_extension="zip"
-                ;;
-            flaresolverr)
-                setup_flaresolverr_dependencies
-                file_extension="tar.gz"
-                ;;
-            overseerr)
-                setup_overseerr_dependencies
-                file_extension="tar.gz"
-                ;;
-            *)
-                file_extension="tar.gz"
-                ;;
-        esac
 
         # User and group setup
         app_user="${app_name}"
@@ -115,24 +91,23 @@ setup_app() {
         src_url=$(eval echo \$"${src_url_var}")
         task_info "Download source URL: ${src_url}"
 
-        wget -O "${TEMPDIR}/${app_name}.${file_extension}" -q --show-progress "${src_url}" || 
-            error_exit "Failed to download ${app_name}"
-
-        task_pass "Source file downloaded. SHA256: $(sha256sum ${TEMPDIR}/${app_name}.${file_extension} | cut -d ' ' -f 1)"
-
-        task_info "Extracting ${app_name} to ${app_opt_path}..."
-        mkdir -p "${app_opt_path}"
-
-        case "${app}" in
+        # Handle different applications
+        case "${app_name}" in
             bazarr)
-                unzip -q "${TEMPDIR}/${app_name}.${file_extension}" -d "${app_opt_path}" || 
+                setup_bazarr_dependencies
+                wget -O "${TEMPDIR}/${app_name}.zip" -q --show-progress "${src_url}" || 
+                    error_exit "Failed to download ${app_name}"
+                task_pass "Source file downloaded. SHA256: $(sha256sum ${TEMPDIR}/${app_name}.zip | cut -d ' ' -f 1)"
+
+                task_info "Extracting ${app_name} to ${app_opt_path}..."
+                mkdir -p "${app_opt_path}"
+                unzip -q "${TEMPDIR}/${app_name}.zip" -d "${app_opt_path}" || 
                     error_exit "Failed to extract Bazarr"
                 
                 task_info "Setting up Python virtual environment for Bazarr..."
                 python3 -m venv "${app_opt_path}/venv" || 
                     error_exit "Failed to create Python virtual environment"
                 
-                # Activate venv and install requirements
                 . "${app_opt_path}/venv/bin/activate" || 
                     error_exit "Failed to activate Python virtual environment"
                 
@@ -141,23 +116,39 @@ setup_app() {
                 
                 deactivate
                 ;;
-                
+
             flaresolverr)
-                tar -xf "${TEMPDIR}/${app_name}.${file_extension}" -C "${app_opt_path}" || 
-                    error_exit "Failed to extract ${app_name}"
-                npm install --prefix "${app_opt_path}" || 
-                    error_exit "Failed to install FlareSolverr dependencies"
+                setup_flaresolverr_dependencies
+                mkdir -p "${app_opt_path}"
+                wget -O "${app_opt_path}/${app_name}" -q --show-progress "${src_url}" || 
+                    error_exit "Failed to download ${app_name}"
+                chmod +x "${app_opt_path}/${app_name}" ||
+                    error_exit "Failed to make ${app_name} executable"
+                task_pass "Binary downloaded and set up successfully"
                 ;;
-                
+
             overseerr)
-                tar -xf "${TEMPDIR}/${app_name}.${file_extension}" -C "${app_opt_path}" || 
+                setup_overseerr_dependencies
+                wget -O "${TEMPDIR}/${app_name}.tar.gz" -q --show-progress "${src_url}" || 
+                    error_exit "Failed to download ${app_name}"
+                task_pass "Source file downloaded. SHA256: $(sha256sum ${TEMPDIR}/${app_name}.tar.gz | cut -d ' ' -f 1)"
+
+                mkdir -p "${app_opt_path}"
+                tar -xf "${TEMPDIR}/${app_name}.tar.gz" -C "${app_opt_path}" || 
                     error_exit "Failed to extract ${app_name}"
-                npm install --prefix "${app_opt_path}" || 
-                    error_exit "Failed to install Overseerr dependencies"
-                ;;
                 
+                cd "${app_opt_path}" || error_exit "Failed to change to overseerr directory"
+                npm install --production || error_exit "Failed to install Overseerr dependencies"
+                ;;
+
             *)
-                tar -xf "${TEMPDIR}/${app_name}.${file_extension}" -C "/opt/" || 
+                wget -O "${TEMPDIR}/${app_name}.tar.gz" -q --show-progress "${src_url}" || 
+                    error_exit "Failed to download ${app_name}"
+                task_pass "Source file downloaded. SHA256: $(sha256sum ${TEMPDIR}/${app_name}.tar.gz | cut -d ' ' -f 1)"
+
+                task_info "Extracting ${app_name} to ${app_opt_path}..."
+                mkdir -p "${app_opt_path}"
+                tar -xf "${TEMPDIR}/${app_name}.tar.gz" -C "/opt/" || 
                     error_exit "Failed to extract ${app_name}"
                 ;;
         esac
@@ -172,55 +163,103 @@ setup_app() {
         chmod -R 775 "${app_lib_path}"
         task_pass
 
-        # Configure service execution
+        # Configure systemd service
+        task_info "Creating systemd service..."
+        
         case "${app_name}" in
-            jackett)
-                app_exec="${app_opt_path}/${app_name}_launcher.sh"
-                ;;
-            sonarr)
-                app_exec="${app_opt_path}/$(title_case ${app_name}) -nobrowser -data=${app_lib_path}"
-                ;;
             bazarr)
-                app_exec="${app_opt_path}/venv/bin/python ${app_opt_path}/bazarr.py"
-                ;;
-            flaresolverr)
-                app_exec="${app_opt_path}/bin/flaresolverr"
-                app_port="8191"
-                ;;
-            overseerr)
-                app_exec="npm --prefix ${app_opt_path} start"
-                app_port="5055"
-                ;;
-            *)
-                app_exec="${app_opt_path}/$(title_case ${app_name})"
-                ;;
-        esac
-
-        # Create systemd service
-        task_info "Creating systemd service for ${app_name}..."
-        cat > "/etc/systemd/system/${app_name}.service" << EOF
+                cat > "/etc/systemd/system/${app_name}.service" << EOF
 # Generated by HHFTechnology Install Script ${date_stamp}
 [Unit]
-Description=$(title_case ${app_name}) Daemon
-After=syslog.target network.target
+Description=Bazarr Daemon
+After=network.target
 
 [Service]
 WorkingDirectory=${app_opt_path}
 User=${app_user}
 Group=${app_group}
 UMask=0002
-SyslogIdentifier=${app_name}
+ExecStart=${app_opt_path}/venv/bin/python ${app_opt_path}/bazarr.py
 Restart=on-failure
 RestartSec=5
 Type=simple
-ExecStart=${app_exec}
-KillSignal=SIGINT
 TimeoutStopSec=20
-ExecStartPre=/bin/sleep 10
 
 [Install]
 WantedBy=multi-user.target
 EOF
+                ;;
+
+            flaresolverr)
+                cat > "/etc/systemd/system/${app_name}.service" << EOF
+# Generated by HHFTechnology Install Script ${date_stamp}
+[Unit]
+Description=FlareSolverr Daemon
+After=network.target
+
+[Service]
+Type=simple
+User=${app_user}
+Group=${app_group}
+UMask=0002
+Environment="LOG_LEVEL=info"
+Environment="LOG_HTML=false"
+Environment="CAPTCHA_SOLVER=none"
+Environment="PORT=8191"
+Environment="HOST=0.0.0.0"
+ExecStart=${app_opt_path}/flaresolverr
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+                ;;
+
+            overseerr)
+                cat > "/etc/systemd/system/${app_name}.service" << EOF
+# Generated by HHFTechnology Install Script ${date_stamp}
+[Unit]
+Description=Overseerr Daemon
+After=network.target
+
+[Service]
+WorkingDirectory=${app_opt_path}
+User=${app_user}
+Group=${app_group}
+UMask=0002
+Type=simple
+ExecStart=npm start
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+                ;;
+
+            *)
+                cat > "/etc/systemd/system/${app_name}.service" << EOF
+# Generated by HHFTechnology Install Script ${date_stamp}
+[Unit]
+Description=$(title_case ${app_name}) Daemon
+After=network.target
+
+[Service]
+WorkingDirectory=${app_opt_path}
+User=${app_user}
+Group=${app_group}
+UMask=0002
+Type=simple
+ExecStart=${app_opt_path}/$(title_case ${app_name})
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+                ;;
+        esac
 
         # Enable and start service
         systemctl daemon-reload
@@ -231,12 +270,12 @@ EOF
             task_pass "${app_name} service started successfully"
             case "${app_name}" in
                 flaresolverr)
-                    task_info "FlareSolverr is available at: http://localhost:${app_port}"
-                    task_info "Add to Prowlarr FlareSolverr settings: http://localhost:${app_port}"
+                    task_info "FlareSolverr is available at: http://localhost:8191"
+                    task_info "Add to Prowlarr FlareSolverr settings: http://localhost:8191"
                     ;;
                 overseerr)
-                    task_info "Overseerr is available at: http://localhost:${app_port}"
-                    task_info "Complete the setup by visiting http://localhost:${app_port}"
+                    task_info "Overseerr is available at: http://localhost:5055"
+                    task_info "Complete the setup by visiting http://localhost:5055"
                     ;;
             esac
         else
