@@ -274,7 +274,7 @@ self_update() {
 
 # Initialize script
 init_script() {
-    check_root
+    check_superuser # Changed from check_root to check_superuser
     detect_system
     get_application_urls
     display_menu

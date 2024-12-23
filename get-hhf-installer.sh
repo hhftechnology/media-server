@@ -231,7 +231,7 @@ verify_parts() {
     return 0
 }
 
-# Combine scripts with better error handling
+# Find this function in get-hhf-installer.sh
 combine_scripts() {
     update_state "INSTALLING"
     print_status "Combining script components..."
@@ -245,24 +245,32 @@ combine_scripts() {
         return 1
     }
     
-    # Create final script with header
-    cat > "$FINAL_SCRIPT" << EOF || return 1
-#!/bin/bash
-# HHFTechnology Media Server Installation Script
-# Generated: $(date)
-# Version: 1.0.0
-
-EOF
-    
-    # Append each part
-    for part in "${SCRIPT_PARTS[@]}"; do
-        print_status "Adding ${part} to final script..."
-        if ! tail -n +2 "${TEMP_DIR}/${part}" >> "$FINAL_SCRIPT"; then
-            print_error "Failed to append ${part} to final script"
-            return 1
-        fi
-        echo "" >> "$FINAL_SCRIPT"
-    done
+    # Create final script with proper structure
+    {
+        echo '#!/bin/bash'
+        echo ''
+        echo '# Global variables'
+        echo 'SCRIPT_VERSION="1.0.0"'
+        echo 'TEMPDIR="/tmp/hhftechnology"'
+        echo 'APPLIST="jackett sonarr lidarr radarr readarr prowlarr bazarr qbittorrent-nox flaresolverr overseerr"'
+        echo ''
+        
+        # Filter out shebang lines and combine each part
+        for part in "${SCRIPT_PARTS[@]}"; do
+            print_status "Adding ${part} to final script..."
+            sed '/^#!.*sh/d' "${TEMP_DIR}/${part}" || {
+                print_error "Failed to process ${part}"
+                return 1
+            }
+            echo ''
+        done
+        
+        # Add main execution
+        echo 'init_script'
+    } > "$FINAL_SCRIPT" || {
+        print_error "Failed to write final script"
+        return 1
+    }
     
     # Set permissions
     chmod +x "$FINAL_SCRIPT" || {
@@ -271,7 +279,15 @@ EOF
     }
     
     print_success "Successfully combined all script parts"
-    return 0
+    
+    # Verify syntax
+    if bash -n "$FINAL_SCRIPT"; then
+        print_success "Script syntax verification passed"
+        return 0
+    else
+        print_error "Script syntax verification failed"
+        return 1
+    fi
 }
 
 # Install dependencies with retries

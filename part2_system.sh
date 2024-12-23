@@ -50,12 +50,16 @@ detect_system() {
     esac
 
     # Validate Linux-based OS
-    case "${osInfo}" in
-        *linux*|*Linux*|*LINUX*)
+    case "$(uname -s)" in
+        *Linux*)
             task_pass "Linux-based OS detected"
             ;;
         *)
-            error_exit "Linux required. Not detected."
+            if [ -f "/etc/os-release" ] && grep -qi "linux" /etc/os-release; then
+                task_pass "Linux-based OS detected"
+            else
+                error_exit "Linux required. Not detected."
+            fi
             ;;
     esac
 }
