@@ -8,7 +8,7 @@ YELLOW='\033[0;33m'
 NC='\033[0m'
 
 # Script URLs - Replace with your actual repository URLs
-REPO_BASE="https://raw.githubusercontent.com/hhftechnology/media-server/main"
+REPO_BASE="https://raw.githubusercontent.com/hhftechnology/media-server/refs/heads/main"
 SCRIPT_PARTS=(
     "part1_core.sh"
     "part2_system.sh"
