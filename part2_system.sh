@@ -89,9 +89,9 @@ get_application_urls() {
     sonarr_src_url="https://services.sonarr.tv/v1/download/main/latest?version=4&os=linux&arch=${SERVARR_ARCH}"
     bazarr_src_url="https://github.com/morpheus65535/bazarr/releases/latest/download/bazarr.zip"
     # Add FlareSolverr URL
-    flaresolverr_src_url="https://github.com/FlareSolverr/FlareSolverr/releases/latest/download/flaresolverr_linux_${SERVARR_ARCH}"
+    flaresolverr_src_url="https://github.com/FlareSolverr/FlareSolverr/releases/download/v3.3.21/flaresolverr_linux_x64.tar.gz"
     # Add Overseerr URL
-    overseerr_src_url="https://github.com/sct/overseerr/releases/latest/download/overseerr-${SERVARR_ARCH}.tar.gz"
+    overseerr_src_url="https://github.com/sct/overseerr/archive/refs/tags/v1.33.2.tar.gz"
     qbittorrent_nox_src_url="Installed via package manager"
 }
 
