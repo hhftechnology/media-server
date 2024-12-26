@@ -6,14 +6,18 @@ active_services() {
             task_pass "${app} service is active and running"
             case "${app}" in
                 flaresolverr)
-                    curl -s http://localhost:8191/health >/dev/null && 
-                        task_info "FlareSolverr is responding on port 8191" ||
+                    if curl -s http://localhost:8191/health >/dev/null; then
+                        task_info "FlareSolverr is responding on port 8191"
+                    else
                         task_warn "FlareSolverr is not responding"
+                    fi
                     ;;
                 overseerr)
-                    curl -s http://localhost:5055/api/v1/status >/dev/null &&
-                        task_info "Overseerr is responding on port 5055" ||
+                    if curl -s http://localhost:5055/api/v1/status >/dev/null; then
+                        task_info "Overseerr is responding on port 5055"
+                    else
                         task_warn "Overseerr is not responding"
+                    fi
                     ;;
             esac
         else

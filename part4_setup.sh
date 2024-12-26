@@ -130,7 +130,7 @@ setup_app() {
                     error_exit "Failed to extract ${app_name}"
         
                 # Find the actual binary in the extracted contents
-                    BINARY=$(find "${app_opt_path}" -type f -executable -name "flaresolverr")
+                BINARY=$(find "${app_opt_path}" -type f -executable -name "flaresolverr")
                 if [ -z "${BINARY}" ]; then
                     error_exit "Could not find flaresolverr executable in extracted contents"
                 fi
